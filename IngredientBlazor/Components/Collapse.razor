@@ -1,0 +1,32 @@
+﻿<div class="card">
+    <div class="card-header">
+        <button class="btn btn-link" @onclick="ToggleCollapse">
+            @ToggleText
+        </button>
+    </div>
+    <div class="@CollapseClass">
+        <div class="card-body">
+            @ChildContent
+        </div>
+    </div>
+</div>
+
+
+@code {
+
+    [Parameter]
+    public string ToggleText { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool IsCollapsed { get; set; } = true;
+
+    private string CollapseClass => IsCollapsed ? "collapse" : "collapse show";
+
+    private void ToggleCollapse()
+    {
+        IsCollapsed = !IsCollapsed;
+    }
+
+}

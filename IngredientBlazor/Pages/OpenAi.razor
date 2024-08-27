@@ -1,0 +1,56 @@
+﻿@page "/openai"
+@inject OpenAiService openAiService
+
+<PageTitle>OpenAI</PageTitle>
+
+
+
+<h1>OpenAI</h1>
+
+<input type="text" @bind="VectorStoreId" placeholder="Enter Vector store id"/>
+<button @onclick="GetFiles">Get Files</button>
+
+<p></p>
+
+<input type="text" @bind="Product" placeholder="Enter Vector store id" />
+<button @onclick="GetIngredients">Get Ingridents</button>
+
+
+<button @onclick="AddFile">Add File to vector store</button>
+
+<p></p>
+<button @onclick="ClearOpenAI">Clean OpenAI</button>
+
+
+
+@code {
+    private string VectorStoreId { get; set; }
+
+    private string Product { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+    }
+
+    private async Task GetFiles()
+    {
+        await openAiService.GetFileDetails(VectorStoreId);
+
+    }
+
+    private async Task AddFile()
+    {
+        //await openAiService.AddFileToVectorStore();
+    }
+
+    private async Task ClearOpenAI()
+    {
+        await openAiService.DeleteVectorStore();
+    }
+
+    private async Task GetIngredients()
+    {
+        await openAiService.AskAssistanceApi(VectorStoreId ,Product);
+    }
+}

@@ -1,0 +1,18 @@
+﻿@page "/"
+@namespace IngredientBlazor.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+}
+
+<component type="typeof(App)" render-mode="ServerPrerendered" />
+<script>
+    function saveAsFile(filename, bytesBase64, contentType) {
+        var link = document.createElement('a');
+        link.download = filename;
+        link.href = "data:" + contentType + ";base64," + bytesBase64;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>

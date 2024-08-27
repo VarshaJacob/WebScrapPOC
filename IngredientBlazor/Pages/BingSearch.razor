@@ -1,0 +1,40 @@
+﻿@page "/bingsearch"
+@using IngredientBlazor.Data
+@inject BingSearchService BingSearchService
+
+
+<PageTitle>Bing Search</PageTitle>
+
+
+
+<h1>Bing Search</h1>
+<input type="text" @bind="Product" placeholder="Enter product here"/>
+<button @onclick="GetBingSearch">Search</button>
+
+@if (BingUrls.Count > 0 )
+{
+    @foreach(var url in BingUrls)
+    {
+        <p>@url</p>
+    }
+}
+
+
+
+
+
+@code {
+    private string Product { get; set; }
+    private List<string> BingUrls { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+
+    }
+
+    private async Task GetBingSearch()
+    {
+        BingUrls = await BingSearchService.GetBingSearchUrlsAsync(Product);
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,165 @@
+﻿@page "/ingredientsmulitple"
+@inject BingSearchService bingSearchService
+@inject WebScrapervice webScrapService
+@inject OpenAiService openAiService
+@using ClosedXML.Excel
+
+
+
+<PageTitle>Ingredients Multiple</PageTitle>
+
+<h1>Ingredients Multiple</h1>
+<InputFile OnChange="HandleFileUpload" />
+
+<p></p>
+@if (productsList.Count > 0)
+{
+    <h3>Products</h3>
+    <ul>
+        @foreach (var product in productsList)
+        {
+            <li>@product</li>
+        }
+    </ul>
+
+    <button @onclick="Process">Get Ingredients</button>
+}
+
+<p></p>
+
+@if (productResults.Count > 0)
+{
+    <button @onclick="CreateExcelFile">Download</button>
+}
+
+@code {
+    List<string> productsList = new List<string>();
+    List<Product> productResults = new List<Product>();
+
+    async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        productResults.Clear();
+        productsList.Clear();
+        StateHasChanged();
+        try
+        {
+            var file = e.File;
+            var columnData = new List<string>();
+            if (file != null)
+            {
+                using var stream = file.OpenReadStream();
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
+                using var workbook = new XLWorkbook(memoryStream);
+                var worksheet = workbook.Worksheet(1); // Assuming data is in the first worksheet
+
+                foreach (var row in worksheet.RowsUsed())
+                {
+                    var cellValue = row.Cell(1).GetValue<string>(); // Assuming data is in the first column
+                    columnData.Add(cellValue);
+                }
+            }
+            productsList = columnData;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task Process()
+    {
+        var tasks = new List<Task>();
+        var semaphore = new SemaphoreSlim(3); // Add a semaphore with a limit of 5 tasks
+
+        foreach (var productName in productsList)
+        {
+            await semaphore.WaitAsync(); // Wait for a slot to become available in the semaphore
+
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    var productResult = await GetIngredients(productName);
+
+                    lock (productResults)
+                    {
+                        productResults.Add(productResult);
+                    }
+                }
+                finally
+                {
+                    semaphore.Release(); // Release the semaphore slot
+                }
+
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+        StateHasChanged();
+    }
+
+   
+
+    private async Task<Product> GetIngredients(string productName)
+    {
+        var product = new Product { ProductName = productName };
+        product.BingUrls = await bingSearchService.GetBingSearchUrlsAsync(product.ProductName);
+        product.ScrapedResults = await webScrapService.ScrapUrlsOnebyOneAsync(product.BingUrls);
+        product.Answer = await openAiService.GetIngredients(product.ScrapedResults, product.ProductName);
+        return product;
+    }
+
+    private async Task CreateExcelFile()
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Products");
+
+        // Add headers
+        worksheet.Cell(1, 1).Value = "Product Name";
+        worksheet.Cell(1, 2).Value = "Bing URLs";
+        worksheet.Cell(1, 3).Value = "Scraped Results";
+        worksheet.Cell(1, 4).Value = "Answer";
+
+        // Add data
+        for (int i = 0; i < productResults.Count; i++)
+        {
+            var product = productResults[i];
+            worksheet.Cell(i + 2, 1).Value = product.ProductName;
+            worksheet.Cell(i + 2, 2).Value = string.Join(", ", product.BingUrls);
+            worksheet.Cell(i + 2, 3).Value = string.Join(", ", product.ScrapedResults);
+            worksheet.Cell(i + 2, 4).Value = product.Answer;
+        }
+
+        // Set column widths
+        worksheet.Column(1).Width = 20;
+        worksheet.Column(2).Width = 40;
+        worksheet.Column(3).Width = 40;
+        worksheet.Column(4).Width = 40;
+
+        // Generate file name
+        var fileName = $"ProductResults_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+
+        // Save the workbook
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        // Convert the stream to a byte array
+        var byteArray = stream.ToArray();
+
+        // Convert byte array to base64
+        var base64 = Convert.ToBase64String(byteArray);
+
+
+        // Download the file
+        await JSRuntime.InvokeVoidAsync("saveAsFile", fileName, base64, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+
+    }
+
+
+}

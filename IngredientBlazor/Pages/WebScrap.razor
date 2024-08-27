@@ -1,0 +1,59 @@
+﻿@page "/webscrap"
+@inject WebScrapervice webScrapService
+
+
+<PageTitle>WebScrap</PageTitle>
+
+
+
+<h1>Web scrap</h1>
+<input type="text" @bind="Url" placeholder="Enter Url here"/>
+<button @onclick="GetScrapedContentAgility">Html agility</button>
+
+<p></p>
+<input type="text" @bind="Url" placeholder="Enter Url here" />
+<button @onclick="GetScrapedContentHttp">Http</button>
+
+<p></p>
+<input type="text" @bind="Url" placeholder="Enter Url here" />
+<button @onclick="GetScrapedContentSelenium">Selenium</button>
+
+<div style="width: auto">
+    @if ( ScrapedResult != null)
+    {
+        <p>@ScrapedResult.Content</p>
+    }
+</div>
+
+
+
+
+
+
+@code {
+    private string Url { get; set; }
+    private ScrapedResult ScrapedResult { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+    }
+
+    private async Task GetScrapedContentAgility()
+    {
+        ScrapedResult = await webScrapService.ScrapUrlAgilityAsync(Url);
+        StateHasChanged();
+    }
+
+    private async Task GetScrapedContentHttp()
+    {
+        ScrapedResult = await webScrapService.ScrapUrlHttpAsync(Url);
+        StateHasChanged();
+    }
+
+    private async Task GetScrapedContentSelenium()
+    {
+        ScrapedResult = await webScrapService.ScrapUrlSeleniumAsync(Url);
+        StateHasChanged();
+    }
+}

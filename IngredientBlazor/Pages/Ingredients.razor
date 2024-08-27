@@ -1,0 +1,100 @@
+﻿@page "/ingredients"
+@inject BingSearchService bingSearchService
+@inject WebScrapervice webScrapService
+@inject OpenAiService openAiService
+
+<PageTitle>Ingredients</PageTitle>
+
+
+
+<h1>Ingredients</h1>
+<input type="text" @bind="Product" placeholder="Enter Product Name"/>
+<button @onclick="GetIngredients">Bing Search</button>
+
+<div class="w-100">
+    @if (!string.IsNullOrEmpty(Status))
+    {
+        <p>@Status</p>
+
+    }
+
+    @if (BingSearchUrls.Count > 0)
+    {
+        @foreach (var url in BingSearchUrls)
+        {
+            <ul><a href="@url">@url</a></ul>
+        }
+    }
+
+    @if (ScrapedResults.Count > 0)
+    {
+        @foreach (var content in ScrapedResults.Where(s => s.Status != ScrapedStatusEnum.Failed))
+        {
+            <Collapse ToggleText="@content.Url">
+                <ChildContent>
+                    @content.Content
+                </ChildContent>
+            </Collapse>
+            
+        }
+
+    }
+
+    @if (!string.IsNullOrEmpty(Answer))
+    {
+        <p>@Answer</p>
+    }
+</div>
+
+@code {
+    private string Product { get; set; }
+    private List<string> BingSearchUrls { get; set; } = new();
+    private List<ScrapedResult> ScrapedResults { get; set; } = new();
+    private string Status {get; set; }
+    private string Answer { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+    }
+
+    private async Task GetIngredients()
+    {
+        BingSearchUrls = new();
+        ScrapedResults = new();
+        Answer = string.Empty;
+
+        Status = "Searching Bing";
+        StateHasChanged();
+        await BingSearch();
+
+        Status = "Web Scraping";
+        StateHasChanged();
+        await WebScrap();
+
+        Status = "Open Ai";
+        StateHasChanged();
+        await OpenAi();
+
+        Status = "Done";
+        StateHasChanged();
+
+    }
+
+    private async Task BingSearch()
+    {
+        BingSearchUrls = await bingSearchService.GetBingSearchUrlsAsync(Product);
+    }
+
+    private async Task WebScrap()
+    {
+        //ScrapedResults = await webScrapService.ScrapUrlsAsync(BingSearchUrls);
+        ScrapedResults = await webScrapService.ScrapUrlsOnebyOneAsync(BingSearchUrls);
+    }
+
+    private async Task OpenAi()
+    {
+        Answer = await openAiService.GetIngredients(ScrapedResults, Product);
+        StateHasChanged();
+    }
+}
