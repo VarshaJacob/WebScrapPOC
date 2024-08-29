@@ -22,7 +22,7 @@ namespace IngredientBlazor.Data
             Name = "IngredientAssistant",
             Tools = { new FileSearchToolDefinition() },
             Temperature = 0.5f,
-            Instructions = "Given content about a food item, provide a distinct list of ingredients of the specified food item.",
+            Instructions = "Given content about a food item, provide a distinct list of ingredients of the specified food item. If ingredients are not available, start answer with Failed",
         };
         private Assistant assistant;
         public OpenAiService(OpenAiOptions openAiOptions)
@@ -104,7 +104,6 @@ namespace IngredientBlazor.Data
 
                 await foreach (var vectorStore in vectorStoreClient.GetVectorStoresAsync())
                 {
-
                     await vectorStoreClient.DeleteVectorStoreAsync(vectorStore.Id);
                 }
 
@@ -129,7 +128,7 @@ namespace IngredientBlazor.Data
 
             await foreach (var file in vectorStoreClient.GetFileAssociationsAsync(vectorStore))
             {
-                //var temp = file.LastError.Value.Message;
+                var error = file.LastError.Value.Message;
 
             }
         }
@@ -140,13 +139,20 @@ namespace IngredientBlazor.Data
 
             var uploadbatch = await vectorStoreClient.CreateBatchFileJobAsync(vectorStore.Value.Id, fileIds);
 
-            Thread.Sleep(5000);
-            //TO DO: have to handle failed cases
+            // To avoid exceeding rate limits per minuete of OpenAI, pause implementation can be added.
+            // Thread.Sleep(5000);
+
+            // TO DO: handle failed cases
             while (uploadbatch.Value.Status == VectorStoreBatchFileJobStatus.InProgress)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(500));
                 uploadbatch = await vectorStoreClient.GetBatchFileJobAsync(uploadbatch);
             }
+
+            // NOTE: All files may not be added to vector store.
+            // GetBatchFileJobAsync method does not give file details.
+            // GetFileDetails method above can be used to get file details.
+            // Can implement a retry mechanism to add failed files to vector store. (does increase time)
 
             Console.WriteLine($"Add file to vector store Progress: {uploadbatch.Value.FileCounts.Completed}/{fileIds.Count}");
 
@@ -155,6 +161,9 @@ namespace IngredientBlazor.Data
 
         public async Task<string> AskAssistanceApi(string vectorStoreId, string product)
         {
+            // NOTE: One assistant is created and vector store is added to the thread.
+            // Creating a new assistant for each product exceeds rate limit. Can implement grouping if needed.
+
             var threadCreationOptions = new ThreadCreationOptions
             {
                 ToolResources = new ToolResources
@@ -169,13 +178,10 @@ namespace IngredientBlazor.Data
             var thread = await assistantClient.CreateThreadAsync(threadCreationOptions);
             var result = await assistantClient.CreateMessageAsync(thread.Value, [$"What are the ingredients of a {product}?"]);
 
-
-
+            // Retry implementation for getting response from assistant
             var answer = string.Empty;
             var maxRetry = 3;
             var tries = 0;
-
-            
 
             while (string.IsNullOrEmpty(answer) && tries < maxRetry)
             {
@@ -203,6 +209,7 @@ namespace IngredientBlazor.Data
             Console.WriteLine($"Answer: {answer}");
 
             return answer;
+
         }
     }
 }

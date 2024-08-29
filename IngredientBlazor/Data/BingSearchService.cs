@@ -15,13 +15,11 @@ namespace IngredientBlazor.Data
         }
         public async Task<List<string>> GetBingSearchUrlsAsync(string product)
         {
-            //using azure bing resource
-            //REST
-            //c# sdk available as well
+            // Using azure bing resource
+            // REST
+            // c# sdk available as well
 
-            var temp = product;
-            var t = Uri.EscapeDataString(temp);
-            var response = await httpClient.GetAsync($"{searchOptions.Endpoint}?q={Uri.EscapeDataString(temp)}&mkt=en-gb");
+            var response = await httpClient.GetAsync($"{searchOptions.Endpoint}?q={Uri.EscapeDataString(product)}&mkt=en-gb");
             var searchResponse = await response.Content.ReadAsStringAsync();
 
             JsonDocument doc = JsonDocument.Parse(searchResponse);
@@ -36,6 +34,8 @@ namespace IngredientBlazor.Data
                     urlResults.Add(urlResult);
                 }
             }
+
+            //Filtering the bing search results
 
             var allowedSites = new List<string> { "tesco"};
             var filteredResults = urlResults.Where(x => allowedSites.Any(site => x.Contains(site))).ToList();

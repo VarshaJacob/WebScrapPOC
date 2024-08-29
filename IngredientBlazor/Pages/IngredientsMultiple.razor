@@ -3,6 +3,8 @@
 @inject WebScrapervice webScrapService
 @inject OpenAiService openAiService
 @using ClosedXML.Excel
+@using System.Diagnostics
+@using System.Collections.ObjectModel
 
 
 
@@ -27,14 +29,17 @@
 
 <p></p>
 
+
 @if (productResults.Count > 0)
 {
+    <p>Time taken for processing: @TimeTaken</p>
     <button @onclick="CreateExcelFile">Download</button>
 }
 
 @code {
     List<string> productsList = new List<string>();
-    List<Product> productResults = new List<Product>();
+    ObservableCollection<Product> productResults = new ObservableCollection<Product>();
+    private string TimeTaken = string.Empty;
 
     async Task HandleFileUpload(InputFileChangeEventArgs e)
     {
@@ -72,12 +77,19 @@
 
     private async Task Process()
     {
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
+
         var tasks = new List<Task>();
-        var semaphore = new SemaphoreSlim(3); // Add a semaphore with a limit of 5 tasks
+
+        // Add a semaphore with a limit of number of tasks to run concurrently
+        // to limit running multiple selenium drivers simultaneously as it is resource intensive    Web
+        var semaphore = new SemaphoreSlim(3); 
 
         foreach (var productName in productsList)
         {
-            await semaphore.WaitAsync(); // Wait for a slot to become available in the semaphore
+            // Wait for a slot to become available in the semaphore
+            await semaphore.WaitAsync(); 
 
             tasks.Add(Task.Run(async () =>
             {
@@ -88,18 +100,26 @@
                     lock (productResults)
                     {
                         productResults.Add(productResult);
+                        
                     }
                 }
                 finally
                 {
-                    semaphore.Release(); // Release the semaphore slot
+                    // Release the semaphore slot
+                    semaphore.Release(); 
                 }
 
             }));
         }
 
         await Task.WhenAll(tasks);
+
+        stopwatch.Stop();
+        TimeTaken = stopwatch.Elapsed.ToString();
+
         StateHasChanged();
+
+        
     }
 
    
@@ -108,9 +128,14 @@
     {
         var product = new Product { ProductName = productName };
         product.BingUrls = await bingSearchService.GetBingSearchUrlsAsync(product.ProductName);
-        product.ScrapedResults = await webScrapService.ScrapUrlsOnebyOneAsync(product.BingUrls);
+        //product.ScrapedResults = await webScrapService.ScrapUrlsOnebyOneAsync(product.BingUrls);
+        //OR
+        product.ScrapedResults = await webScrapService.ScrapUrlsAsync(product.BingUrls);
         product.Answer = await openAiService.GetIngredients(product.ScrapedResults, product.ProductName);
         return product;
+
+        // TODO: Clean up open ai
+        // delete vector stores and files, will need to store vector store id and file ids
     }
 
     private async Task CreateExcelFile()
