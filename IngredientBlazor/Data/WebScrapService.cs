@@ -1,6 +1,9 @@
 using HtmlAgilityPack;
 using IngredientBlazor.Domain;
+using Microsoft.Extensions.Options;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Support.UI;
 using System.IO.Compression;
 using System.Text;
 
@@ -53,7 +56,6 @@ namespace IngredientBlazor.Data
                 //will just work from a broswer, hence trying selenium if http fails
                 if (scrapedResult.Status == ScrapedStatusEnum.Failed)
                 {
-                    Console.WriteLine($"http scrap failed trying selenium: {scrapedResult.Url}");
                     scrapedResult = await ScrapUrlSeleniumAsync(url);
                 }
                 scrapedResults.Add(scrapedResult);
@@ -153,24 +155,29 @@ namespace IngredientBlazor.Data
                 // Disable /dev/shm usage
                 chromeOptions.AddArguments("--disable-dev-shm-usage");
                 // Disable extensions
-                chromeOptions.AddArguments("--disable-extensions"); 
-                // Disable images and features that are not needed
-                chromeOptions.AddUserProfilePreference("profile.default_content_setting_values.images", 2);
+                chromeOptions.AddArguments("--disable-extensions");
 
+                chromeOptions.AddArgument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+                chromeOptions.AddArgument("window-size=1920,1080");
+                // Disable images and features that are not needed
+                //chromeOptions.AddUserProfilePreference("profile.default_content_setting_values.images", 2);
+
+                //chromeOptions.AddArgument("--disable-http2");
                 using (var driver = new ChromeDriver(chromeOptions))
                 {
-                    driver.Navigate().GoToUrl(url);
-                    content = driver.PageSource;
-                    driver.Close();
-                    driver.Quit();
                     
-                    Console.WriteLine($"Driver is running = {driver.HasActiveDevToolsSession}");
+                    driver.Navigate().GoToUrl(url);
+                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+                    wait.Until(driver => driver.FindElement(By.TagName("body")));
+                    content = driver.PageSource;
+                    
+                    driver.Quit();
                 }
 
                 var htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(content);
 
-                scrapedResult.Content = htmlDoc?.DocumentNode.InnerText.Trim().Replace(" +", "").Replace("\n", "") ?? string.Empty;
+                scrapedResult.Content = htmlDoc?.DocumentNode.InnerText.Trim().Replace(" +", " ").Replace("\n", " ") ?? string.Empty;
 
                 scrapedResult.Status = ScrapedStatusEnum.Completed;
                 

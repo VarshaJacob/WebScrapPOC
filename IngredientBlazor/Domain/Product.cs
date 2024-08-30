@@ -5,6 +5,6 @@
         public string ProductName { get; set; }
         public List<string> BingUrls { get; set; }
         public List<ScrapedResult> ScrapedResults { get; set; }
-        public string Answer { get; set; }
+        public OpenAIResult OpenAIResult { get; set; }
     }
 }

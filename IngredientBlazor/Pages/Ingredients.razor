@@ -94,7 +94,8 @@
 
     private async Task OpenAi()
     {
-        Answer = await openAiService.GetIngredients(ScrapedResults, Product);
+        var openAIResult = await openAiService.GetIngredients(ScrapedResults, Product);
+        Answer = openAIResult.Answer;
         StateHasChanged();
     }
 }

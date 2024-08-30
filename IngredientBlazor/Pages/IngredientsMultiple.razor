@@ -131,7 +131,9 @@
         //product.ScrapedResults = await webScrapService.ScrapUrlsOnebyOneAsync(product.BingUrls);
         //OR
         product.ScrapedResults = await webScrapService.ScrapUrlsAsync(product.BingUrls);
-        product.Answer = await openAiService.GetIngredients(product.ScrapedResults, product.ProductName);
+
+        product.OpenAIResult = await openAiService.GetIngredients(product.ScrapedResults, product.ProductName);
+        
         return product;
 
         // TODO: Clean up open ai
@@ -148,6 +150,8 @@
         worksheet.Cell(1, 2).Value = "Bing URLs";
         worksheet.Cell(1, 3).Value = "Scraped Results";
         worksheet.Cell(1, 4).Value = "Answer";
+        worksheet.Cell(1, 5).Value = "Status";
+        worksheet.Cell(1, 6).Value = "Files Added";
 
         // Add data
         for (int i = 0; i < productResults.Count; i++)
@@ -156,7 +160,11 @@
             worksheet.Cell(i + 2, 1).Value = product.ProductName;
             worksheet.Cell(i + 2, 2).Value = string.Join(", ", product.BingUrls);
             worksheet.Cell(i + 2, 3).Value = string.Join(", ", product.ScrapedResults);
-            worksheet.Cell(i + 2, 4).Value = product.Answer;
+            //Below is too many chars in a cell
+            //worksheet.Cell(i + 2, 3).Value = string.Join(", ", product.ScrapedResults.Select(s => s.Content));
+            worksheet.Cell(i + 2, 4).Value = product.OpenAIResult.Answer;
+            worksheet.Cell(i + 2, 5).Value = product.OpenAIResult.Status.ToString();
+            worksheet.Cell(i + 2, 6).Value = product.OpenAIResult.FilesAddedToVectorStore;
         }
 
         // Set column widths
@@ -164,6 +172,7 @@
         worksheet.Column(2).Width = 40;
         worksheet.Column(3).Width = 40;
         worksheet.Column(4).Width = 40;
+        worksheet.Column(5).Width = 40;
 
         // Generate file name
         var fileName = $"ProductResults_{DateTime.Now:yyyyMMddHHmmss}.xlsx";

@@ -22,7 +22,7 @@ namespace IngredientBlazor.Data
             Name = "IngredientAssistant",
             Tools = { new FileSearchToolDefinition() },
             Temperature = 0.5f,
-            Instructions = "Given content about a food item, provide a distinct list of ingredients of the specified food item. If ingredients are not available, start answer with Failed",
+            Instructions = "You will be provided with data files containing content about specific product. Your task is to extract and list the ingredients of the specified product from these data files. If ingredients are not available, start answer with Failed"
         };
         private Assistant assistant;
         public OpenAiService(OpenAiOptions openAiOptions)
@@ -35,14 +35,15 @@ namespace IngredientBlazor.Data
             assistant = assistantClient.CreateAssistant(openAiOptions.DeploymentName, assistantCreationOptions);
         }
 
-        public async Task<string> GetIngredients(List<ScrapedResult> scrapedResults, string product)
+        public async Task<OpenAIResult> GetIngredients(List<ScrapedResult> scrapedResults, string product)
         {
 
             var fileIds = await UploadFilesAsync(scrapedResults);
 
-            var vectorStoreId = await AddFilesToVectorStore(fileIds, product);
+            var (vectorStoreId, filesAdded) = await AddFilesToVectorStore(fileIds, product);
 
             var answer = await AskAssistanceApi(vectorStoreId, product);
+            answer.FilesAddedToVectorStore = filesAdded;
 
             return answer;
         }
@@ -57,8 +58,6 @@ namespace IngredientBlazor.Data
                     //max 20 files, 512 Mb, 50,00,000 tokens
                     var chunks = GetChunks(scrapedResult.Content, 1000000);
 
-                    Console.WriteLine($"Scraped content length: {scrapedResult.Content.Length}");
-
                     foreach (var chunk in chunks)
                     {
                         var stream = GenerateStreamFromString(chunk);
@@ -66,7 +65,6 @@ namespace IngredientBlazor.Data
 
                         var temp1 = stream.Length;
                         var fileName = Guid.NewGuid();
-                        Console.WriteLine($"{fileName.ToString()}:{temp1}:{chunk.Length}");
 
                         var fileId = await fileClient.UploadFileAsync(stream, $"{fileName}.docx", FileUploadPurpose.Assistants);
                         fileIds.Add(fileId.Value.Id);
@@ -104,6 +102,7 @@ namespace IngredientBlazor.Data
 
                 await foreach (var vectorStore in vectorStoreClient.GetVectorStoresAsync())
                 {
+                    Console.WriteLine(vectorStore.Name);
                     await vectorStoreClient.DeleteVectorStoreAsync(vectorStore.Id);
                 }
 
@@ -133,7 +132,7 @@ namespace IngredientBlazor.Data
             }
         }
 
-        public async Task<string> AddFilesToVectorStore(List<string> fileIds, string vectorName)
+        public async Task<(string,string)> AddFilesToVectorStore(List<string> fileIds, string vectorName)
         {
             var vectorStore = await vectorStoreClient.CreateVectorStoreAsync(new VectorStoreCreationOptions { Name = vectorName });
 
@@ -148,6 +147,7 @@ namespace IngredientBlazor.Data
                 await Task.Delay(TimeSpan.FromMilliseconds(500));
                 uploadbatch = await vectorStoreClient.GetBatchFileJobAsync(uploadbatch);
             }
+            
 
             // NOTE: All files may not be added to vector store.
             // GetBatchFileJobAsync method does not give file details.
@@ -156,10 +156,10 @@ namespace IngredientBlazor.Data
 
             Console.WriteLine($"Add file to vector store Progress: {uploadbatch.Value.FileCounts.Completed}/{fileIds.Count}");
 
-            return vectorStore.Value.Id;
+            return (vectorStore.Value.Id, $"{uploadbatch.Value.FileCounts.Completed}/{fileIds.Count}");
         }
 
-        public async Task<string> AskAssistanceApi(string vectorStoreId, string product)
+        public async Task<OpenAIResult> AskAssistanceApi(string vectorStoreId, string product)
         {
             // NOTE: One assistant is created and vector store is added to the thread.
             // Creating a new assistant for each product exceeds rate limit. Can implement grouping if needed.
@@ -183,9 +183,8 @@ namespace IngredientBlazor.Data
             var maxRetry = 3;
             var tries = 0;
 
-            while (string.IsNullOrEmpty(answer) && tries < maxRetry)
+            while ((string.IsNullOrEmpty(answer)) && tries < maxRetry)
             {
-                Console.WriteLine($"Try for response: {tries}");
                 tries++;
                 var run = await assistantClient.CreateRunAsync(thread.Value, assistant);
                 do
@@ -206,9 +205,14 @@ namespace IngredientBlazor.Data
                 }
             }
 
-            Console.WriteLine($"Answer: {answer}");
-
-            return answer;
+            if (string.IsNullOrEmpty(answer) || answer.Contains("Failed"))
+            {
+                return new OpenAIResult { Answer = answer, Status = AnswerStatusEnum.Failed };
+            }
+            else
+            {
+                return new OpenAIResult { Answer = answer, Status = AnswerStatusEnum.Success };
+            }
 
         }
     }
